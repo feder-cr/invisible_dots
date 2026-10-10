@@ -430,7 +430,10 @@ check_offered 6 "delete asks, create is denied, nothing else" \
 # GET /tools is the same table seen from the host: the whole table, and `offered` says what the model got.
 # The map of check 3 is pushed again: the model was offered exactly exec and its two sessions tools.
 offered_with 3b '{"computer.exec":"allow"}' >/dev/null
-check "GET /tools through dot-agentd lists the 30 tools of the table, each with a description" "api $A/tools | jq -e '(.tools|length)==30 and all(.tools[]; (.description|length)>0 and (.permission|length)>0)' >/dev/null"
+# As many as the engine's permission table has rows: counted from the table, so a tool added or taken out is not a
+# number to remember here.
+TABLE_TOOLS=$(grep -c '^        "[a-z_]*": ToolEntry(' "$ENGINE_TESTS/../nanobot/dots/permissions.py")
+check "GET /tools through dot-agentd lists the $TABLE_TOOLS tools of the table, each with a description" "[ $TABLE_TOOLS -gt 0 ] && api $A/tools | jq -e '(.tools|length)==$TABLE_TOOLS and all(.tools[]; (.description|length)>0 and (.permission|length)>0)' >/dev/null"
 check "GET /tools offers what the model was offered" "[ \"\$(api $A/tools | jq -c '[.tools[]|select(.offered)|.name]|sort')\" = '[\"exec\",\"exec_session\",\"list_exec_sessions\"]' ]"
 check "GET /tools names the permission each tool exercises" "api $A/tools | jq -e '(.tools|map({(.name):.permission})|add) | .exec==\"computer.exec\" and .read_file==\"files.read\" and .write_file==\"files.write\" and .cron==\"automations\"' >/dev/null"
 # The host reads the Dot's files through the TCP port, which is limited to /home/dot with every symbolic link followed.
