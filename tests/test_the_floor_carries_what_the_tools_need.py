@@ -36,6 +36,9 @@ WHAT_THE_TOOLS_NEED = {
         ("0.25.8", "a file chooser opened for a hidden file input takes the files"),
         ("0.35.0", "browser_read_text right after browser_navigate reads the page "
                    "that replaced itself instead of failing on its vanished world"),
+        ("0.35.2", "browser_snapshot and browser_read_html read through "
+                   "page.evaluate_read, and browser_evaluate runs the model's "
+                   "code once when its page navigates while it waits"),
     ],
 }
 

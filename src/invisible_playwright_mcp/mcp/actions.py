@@ -488,7 +488,13 @@ async def snapshot(session) -> str:
     dropdown.
     """
     page = session.page()
-    d = await page.evaluate(SNAPSHOT_JS)
+    # ⛔ `evaluate_read`, NOT `evaluate`: the snapshot is a read without
+    # effects, and a page that navigates under it is read again on the page
+    # that replaced it. `evaluate` sends the code once and raises Playwright's
+    # navigation error, which is right for the model's code (`evaluate` below)
+    # and wrong for a read right after `browser_navigate` on a page that
+    # replaces itself (invisible-playwright 0.35.2, [B285]).
+    d = await page.evaluate_read(SNAPSHOT_JS)
     await _resolve_nth(page, d.get("interactive_elements", []))
     return json.dumps(d)
 
@@ -510,7 +516,9 @@ async def read_html(session, mode: str = "form") -> str:
     mode="text"  the prose, with the markup gone
     mode="full"  noise removed and attributes slimmed, structure kept
     """
-    html = await session.page().evaluate(clean.VISIBLE_HTML_JS)
+    # A read without effects, read again on the page that replaced the one it
+    # went to: see `snapshot`.
+    html = await session.page().evaluate_read(clean.VISIBLE_HTML_JS)
     return clean.clean_page(html, mode)
 
 

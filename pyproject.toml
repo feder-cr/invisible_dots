@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "invisible-playwright-mcp"
-version = "0.72.1"
+version = "0.72.2"
 description = "Anti detect browser and web browsing agent: undetected, no captchas, no blocks"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -121,7 +121,14 @@ dependencies = [
     # previous page's own redirect beats answers at once, naming where the
     # browser went, instead of after the 45 s timeout. read_text's
     # one-command read (`all_inner_texts`) is what the tests here measured.
-    "invisible-playwright>=0.35.0",
+    #
+    # And to 0.35.2, through invisible-core 41.38.0: the model's code
+    # (browser_evaluate) runs once when its page navigates while it waits, and
+    # raises Playwright's navigation error instead of running again in the new
+    # page; the snapshot and read_html, reads without effects, ask
+    # `page.evaluate_read`, which reads again on the page that replaced the
+    # one they went to.
+    "invisible-playwright>=0.35.2",
     # HTML parsing for browser_read_html. Chosen over lxml by measurement: on
     # six real pages both found byte-identical sets of interactive elements,
     # so correctness did not separate them, and selectolax then parsed 3-5x

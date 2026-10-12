@@ -35,11 +35,18 @@ class _Page:
     def __init__(self, texts=(), value=None):
         self._texts = list(texts)
         self._value = value
+        #: Which door each evaluation went through.
+        self.doors = []
 
     def locator(self, _selector):
         return _Found(self._texts)
 
     async def evaluate(self, _expression):
+        self.doors.append("evaluate")
+        return self._value
+
+    async def evaluate_read(self, _expression):
+        self.doors.append("evaluate_read")
         return self._value
 
 
@@ -87,3 +94,20 @@ def test_no_tool_takes_or_mentions_a_cap():
     assert not hasattr(actions, "DEFAULT_MAX_CHARS")
     assert not hasattr(actions, "json_capped")
     assert not hasattr(actions, "capped_elements")
+
+
+def test_the_reads_ask_evaluate_read_and_the_models_code_asks_evaluate():
+    """The snapshot and read_html are reads without effects: read again on the
+    page that replaced the one they went to. The model's code is not: it is
+    sent once, and a navigation under it is Playwright's error (invisible-
+    playwright 0.35.2)."""
+    page = _Page(value={"title": "t", "url": "https://example.com/",
+                        "interactive_elements": []})
+    asyncio.run(actions.snapshot(_Session(page)))
+    assert page.doors == ["evaluate_read"]
+    page = _Page(value="<html><body><p>x</p></body></html>")
+    asyncio.run(actions.read_html(_Session(page), "text"))
+    assert page.doors == ["evaluate_read"]
+    page = _Page(value=1)
+    asyncio.run(actions.evaluate(_Session(page), "1"))
+    assert page.doors == ["evaluate"]

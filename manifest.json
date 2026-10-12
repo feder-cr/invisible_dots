@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "invisible-playwright-mcp",
   "display_name": "invisible-playwright-mcp",
-  "version": "0.72.1",
+  "version": "0.72.2",
   "description": "AI browser agent: browses, clicks, types, and reads real web pages from plain-English instructions.",
   "long_description": "invisible-playwright-mcp gives an MCP client a real browser to drive. The tools navigate, click, type, read and screenshot pages the way a person would, on a patched Firefox engine.\n\nThe engine, about a quarter of a gigabyte, is downloaded once by the server itself the first time it starts, outside this bundle. While that download is in flight, browser_open answers with its progress instead of opening a browser.",
   "author": {

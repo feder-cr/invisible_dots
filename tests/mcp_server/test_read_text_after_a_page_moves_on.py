@@ -14,6 +14,13 @@ each to the same site and to another one (127.0.0.1 to localhost, which the
 browser puts in another process). Five rounds each: a race missed once in five
 is still a race. A selector that matches nothing still says so at once.
 
+⛔ AND THE SNAPSHOT AND READ_HTML, EACH AS THE FIRST READ AFTER THE NAVIGATION.
+They run their own fixed reads in the page's world; until invisible-playwright
+0.35.2 they went through `page.evaluate`, which from 0.35.2 sends the code once
+and raises Playwright's navigation error when the page moves under it (the
+model's code must not run twice, [B285]). They ask `page.evaluate_read`, which
+reads again on the page that replaced the one they went to.
+
 ⛔ AND THE SAME REPORT'S 45 s `browser_navigate`. Each round navigates while
 the previous page's own `location.replace` may be in flight, and Firefox lets
 that one win: ours is never heard of again, no commit and no abort. The wait
@@ -105,6 +112,22 @@ def reads():
                     except Exception as exc:  # noqa: BLE001 - the test reads it
                         got = "raised %s: %s" % (type(exc).__name__, exc)
                     out.setdefault(path, []).append((went, took, got))
+            # Each read first after its own navigation: a read that follows
+            # another one meets a page that has had time to settle.
+            for kind, read in (("snapshot", lambda: actions.snapshot(session)),
+                               ("read_html", lambda: actions.read_html(session, "text"))):
+                for path in ("/head", "/r0", "/r50", "/r300", "/x0", "/x50", "/x300"):
+                    for i in range(ROUNDS):
+                        try:
+                            await actions.navigate(session, "%s%s?%s=%d"
+                                                   % (base, path, kind, i))
+                        except Exception:  # noqa: BLE001 - the read is the point
+                            pass
+                        try:
+                            got = await read()
+                        except Exception as exc:  # noqa: BLE001 - the test reads it
+                            got = "raised %s: %s" % (type(exc).__name__, exc)
+                        out.setdefault((kind, path), []).append(got)
             out["miss"] = await actions.read_text(session, "#nothing-here")
         finally:
             await session.close()
@@ -147,3 +170,27 @@ def test_a_navigation_answers_at_once_even_when_the_previous_page_wins(reads, pa
 @pytest.mark.e2e
 def test_a_selector_that_matches_nothing_still_says_so(reads):
     assert "no element matches" in reads["miss"]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("path", ["/head", "/r0", "/r50", "/r300", "/x0", "/x50", "/x300"])
+def test_a_snapshot_right_after_navigate_answers_with_the_page(reads, path):
+    """A snapshot is a read: the page moving on under it is read again, and it
+    never surfaces "Execution context was destroyed"."""
+    import json
+    for got in reads[("snapshot", path)]:
+        assert not got.startswith("raised"), got
+        d = json.loads(got)
+        assert path in d["url"] or "/landed" in d["url"], d["url"]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("path", ["/head", "/r0", "/r50", "/r300", "/x0", "/x50", "/x300"])
+def test_read_html_right_after_navigate_answers_with_the_page(reads, path):
+    """read_html is a read too. Its text is of either document, or empty when
+    the read lands in the replacing document before its parser reached the
+    paragraph; it is never the navigation error."""
+    for got in reads[("read_html", path)]:
+        assert not got.startswith("raised"), got
+        assert ("FIRST-TEXT" in got or "LANDED-TEXT" in got
+                or "TEXT" not in got), got
