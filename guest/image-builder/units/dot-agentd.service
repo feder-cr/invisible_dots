@@ -32,6 +32,3 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/opt/invisible-dots/bin/dot-agentd
 Restart=on-failure
 RestartSec=2
-
-[Install]
-WantedBy=multi-user.target

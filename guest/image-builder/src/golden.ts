@@ -9,7 +9,7 @@ import { chmod, copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { writeIso } from "@invisible-dots/iso";
 import { hostPaths, type HostPaths } from "@invisible-dots/shared";
-import { BUILDER_BROWSER_BUILD, BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, BUILDER_OTHER_BROWSERS, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot, readGuestAsset } from "./assets.js";
+import { BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot, readGuestAsset, RUNTIME_BROWSER, RUNTIME_OTHER_BROWSERS } from "./assets.js";
 import { latestBrowserRelease, type BrowserRelease } from "./browser-release.js";
 import { fetchVerified, sha256File, type Fetch, type FetchVerifiedOptions } from "./download.js";
 import { acquireLock, type Lock } from "./lock.js";
@@ -105,8 +105,8 @@ export async function buildGoldenImage(options: GoldenBuildOptions): Promise<Gol
   const userData = await readGuestAsset(assetRoot, BUILDER_USER_DATA);
   const provision = await readGuestAsset(assetRoot, BUILDER_PROVISION);
   const engineBuild = await readGuestAsset(assetRoot, BUILDER_ENGINE_BUILD);
-  const browserBuild = await readGuestAsset(assetRoot, BUILDER_BROWSER_BUILD);
-  const otherBrowsers = await readGuestAsset(assetRoot, BUILDER_OTHER_BROWSERS);
+  const browserScript = await readGuestAsset(assetRoot, RUNTIME_BROWSER);
+  const otherBrowsers = await readGuestAsset(assetRoot, RUNTIME_OTHER_BROWSERS);
   const engineLock = await readGuestAsset(assetRoot, BUILDER_ENGINE_LOCK);
   parseHashedLock(engineLock.toString("utf8"), BUILDER_ENGINE_LOCK);
   // The browser is the newest release of invisible-playwright-mcp, asked of the index now: it is an input, so a new
@@ -117,7 +117,7 @@ export async function buildGoldenImage(options: GoldenBuildOptions): Promise<Gol
   // The engine's lock is too, so a changed transitive dependency is another image, and
   // so are the scripts that build the engine's environment and the browser. The engine's own
   // source is not: it travels on the runtime disk (section 3.3).
-  const digest = inputsDigest([JSON.stringify(base), JSON.stringify(pins), userData, provision, JSON.stringify(browser), diskSize, engineLock, engineBuild, browserBuild, otherBrowsers]);
+  const digest = inputsDigest([JSON.stringify(base), JSON.stringify(pins), userData, provision, JSON.stringify(browser), diskSize, engineLock, engineBuild, browserScript, otherBrowsers]);
 
   const { version, image, manifest, existing } = await resolveImageVersion({
     kind: "golden",
@@ -148,7 +148,7 @@ export async function buildGoldenImage(options: GoldenBuildOptions): Promise<Gol
     }
     return await buildLocked(
       { ...options, log, paths, base, pins, diskSize, now, lock },
-      { version, image, manifest, digest, userData, provision, browser, engineLock, engineBuild, browserBuild, otherBrowsers },
+      { version, image, manifest, digest, userData, provision, browser, engineLock, engineBuild, browserScript, otherBrowsers },
     );
   } finally {
     await lock.release();
@@ -176,7 +176,7 @@ interface Target {
   browser: BrowserRelease;
   engineLock: Buffer;
   engineBuild: Buffer;
-  browserBuild: Buffer;
+  browserScript: Buffer;
   otherBrowsers: Buffer;
 }
 
@@ -225,7 +225,7 @@ async function buildLocked(options: GoldenBuildOptions & Resolved, target: Targe
         tunnelBinary,
         engineLock: target.engineLock,
         engineBuild: target.engineBuild,
-        browserBuild: target.browserBuild,
+        browserScript: target.browserScript,
         otherBrowsers: target.otherBrowsers,
       }),
       { volumeId: SEED_VOLUME_ID, timestamp: options.now() },

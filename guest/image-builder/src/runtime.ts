@@ -33,9 +33,11 @@ import {
   defaultAssetRoot,
   GUEST_UNITS,
   readGuestAsset,
+  RUNTIME_BROWSER,
   RUNTIME_DESKTOP,
   RUNTIME_DOT_INSTALL,
   RUNTIME_INSTALL,
+  RUNTIME_OTHER_BROWSERS,
   RUNTIME_VMPROXY,
   unitAsset,
 } from "./assets.js";
@@ -216,6 +218,9 @@ export async function runtimeFiles(inputs: RuntimeInputs, assetRoot: string = de
     stageBytes("vmproxy.py", await readGuestAsset(assetRoot, RUNTIME_VMPROXY)),
     stageBytes("bin/dot-desktop", await readGuestAsset(assetRoot, RUNTIME_DESKTOP)),
     stageBytes("bin/dot-install", await readGuestAsset(assetRoot, RUNTIME_DOT_INSTALL)),
+    // The browser's script and, beside it where it reads it, the list of the browsers it refuses.
+    stageBytes("browser/dot-browser", await readGuestAsset(assetRoot, RUNTIME_BROWSER)),
+    stageBytes("browser/other-browsers.txt", await readGuestAsset(assetRoot, RUNTIME_OTHER_BROWSERS)),
     await stageFile("bin/dot-agentd", inputs.agentdBinary),
     ...(await engineFiles(inputs.engineRoot)),
   ];

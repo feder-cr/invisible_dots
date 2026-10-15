@@ -28,7 +28,7 @@ image's SHA-256; `invisible-dots doctor` checks an image against it with
 3. Writes the builder seed with `@invisible-dots/iso`: one ISO labelled
    `cidata` holding `user-data`, `meta-data`, `provision.sh`, `pins.env`,
    the pinned downloads, `engine-requirements.lock`, `build-engine-env.sh`,
-   `build-browser-env.sh` and `other-browsers.txt`. The engine's own source is
+   and the runtime disk's `dot-browser.sh` with `other-browsers.txt`. The engine's own source is
    not on it: it is ours, so it travels on the runtime ISO.
 4. Boots it once with the QEMU the host runs Dots with, on the accelerator
    the vm-manager chose (`-accel kvm` or `-accel whpx`, never emulation), the
@@ -39,9 +39,9 @@ image's SHA-256; `invisible-dots doctor` checks an image against it with
    `pins.json`'s `apt_snapshot` (`apt-get --snapshot`), uv, then removes the
    cloud image's services a Dot never uses (snapd, unattended-upgrades, apport, the LXD stubs, Ubuntu Pro,
    the release upgrader, the SSH server, pollinate, which would tell Canonical of
-   every new Dot), then builds the Dot's browser with
-   `build-browser-env.sh ~dot/.local/share/invisible-dots/mcp <the three releases>`, as user
-   `dot`: a virtual environment filled with
+   every new Dot), then installs the Dot's browser with
+   `dot-browser.sh install <the three releases>`, as user
+   `dot`: a virtual environment of its own under `~/.local/share/invisible-dots/browser/`, filled with
    `uv pip install --only-binary :all:` of the versions `pins.env` names, its
    `invisible-playwright-mcp` linked into `~/.local/bin`, and
    `invisible-playwright fetch` run from that environment, so the cached browser
@@ -49,7 +49,7 @@ image's SHA-256; `invisible-dots doctor` checks an image against it with
    database, fetched from its release at a launch). The
    browser smoke runs the same script. The only
    browser a Dot has is that server: the build refuses an environment holding a
-   package `builder/other-browsers.txt` names, and a test refuses one among the apt
+   package `runtime/other-browsers.txt` names, and a test refuses one among the apt
    packages and the build scripts. `provision.sh`
    then builds the engine's Python
    environment with `build-engine-env.sh <lock> /opt/invisible-dots-engine
@@ -77,7 +77,9 @@ manifest, so a new release is a new image, and the scheduled run of
 `.github/workflows/golden-image.yml` publishes it. The engine does not assume a
 version: at start it reads the tools and instructions of the server its Dot has
 (`invisible_engine_dots/nanobot/dots/server_interface.py`), so a Dot on an older
-golden image keeps working with every new runtime disk.
+golden image keeps working with every new runtime disk. Its browser follows the newest release all the same:
+at every start the runtime disk's `install.sh` switches to a release an earlier start staged, before the Dot's units
+start, and stages the newest one in the background after them (`runtime/dot-browser.sh`).
 
 `builder/engine-requirements.lock` is the same for the engine
 (`invisible_engine_dots/pyproject.toml`): the one place its dependency
@@ -160,8 +162,8 @@ from Linux or WSL.
 ## The browser smoke
 
 `test/smoke/run.sh --suite browser` runs the same two daemons with the Dot's real browser:
-the apt packages of `pins.json`, the newest browser built by `builder/build-browser-env.sh`,
-the runtime disk's `dot-desktop` script (Xvfb and XFCE on
+the apt packages of `pins.json`, the browser installed by `runtime/dot-browser.sh` on the release
+before the newest and brought to the newest as a Dot's starts bring it, the runtime disk's `dot-desktop` script (Xvfb and XFCE on
 `:0`), and the stand-in model navigating, reading and taking screenshots of pages served
 from the container. The `browser-smoke` job of `.github/workflows/tests.yml` runs it, and
 the `gate` job needs it. It needs the network for the downloads of the build and for the

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { hostPaths, type HostPaths } from "@invisible-dots/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BUILDER_BROWSER_BUILD, BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, BUILDER_OTHER_BROWSERS, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot } from "../src/assets.js";
+import { RUNTIME_BROWSER, BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, RUNTIME_OTHER_BROWSERS, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot } from "../src/assets.js";
 import type { BrowserRelease } from "../src/browser-release.js";
 import { buildGoldenImage, GOLDEN_DEFAULTS, GoldenBuildError, type GoldenBuildOptions } from "../src/golden.js";
 import { readManifest, verifyImage, type GoldenManifest } from "../src/manifest.js";
@@ -177,7 +177,7 @@ describe("buildGoldenImage", () => {
   /** A copy of the guest files the digest reads, for a test that changes one of them. */
   async function assetCopy(): Promise<string> {
     const assetRoot = join(home, "assets");
-    for (const relative of [BUILDER_USER_DATA, BUILDER_PROVISION, BUILDER_ENGINE_LOCK, BUILDER_ENGINE_BUILD, BUILDER_BROWSER_BUILD, BUILDER_OTHER_BROWSERS]) {
+    for (const relative of [BUILDER_USER_DATA, BUILDER_PROVISION, BUILDER_ENGINE_LOCK, BUILDER_ENGINE_BUILD, RUNTIME_BROWSER, RUNTIME_OTHER_BROWSERS]) {
       await mkdir(join(assetRoot, dirname(relative)), { recursive: true });
       await copyFile(join(defaultAssetRoot(), relative), join(assetRoot, relative));
     }
@@ -210,10 +210,10 @@ describe("buildGoldenImage", () => {
     expect(second.version).not.toBe(first.version);
   });
 
-  it("builds a new version when only the script that builds the browser changes", async () => {
+  it("builds a new version when only the script that installs the browser changes", async () => {
     const first = await buildGoldenImage(options({ console: OK_CONSOLE, exit: 0 }).opts);
     const assetRoot = await assetCopy();
-    const scriptPath = join(assetRoot, BUILDER_BROWSER_BUILD);
+    const scriptPath = join(assetRoot, RUNTIME_BROWSER);
     await writeFile(scriptPath, `${await readFile(scriptPath, "utf8")}# changed\n`);
 
     const second = await buildGoldenImage(options({ console: OK_CONSOLE, exit: 0 }, { assetRoot }).opts);
@@ -224,7 +224,7 @@ describe("buildGoldenImage", () => {
   it("builds a new version when only the list of browsers the image refuses changes", async () => {
     const first = await buildGoldenImage(options({ console: OK_CONSOLE, exit: 0 }).opts);
     const assetRoot = await assetCopy();
-    const listPath = join(assetRoot, BUILDER_OTHER_BROWSERS);
+    const listPath = join(assetRoot, RUNTIME_OTHER_BROWSERS);
     await writeFile(listPath, `${await readFile(listPath, "utf8")}servo\n`);
 
     const second = await buildGoldenImage(options({ console: OK_CONSOLE, exit: 0 }, { assetRoot }).opts);

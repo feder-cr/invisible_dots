@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 # The runtime ISO's install hook. cloud-init runs it as root on every boot
 # (a per-boot script written by the seed), after the ISO is mounted at
-# /opt/invisible-dots. It installs the guest units and starts them.
+# /opt/invisible-dots. It sets up the Dot's way out, brings in the browser a
+# previous start staged, installs the guest units and starts them, then stages
+# a newer browser in the background.
 #
 # The units are COPIED into /etc/systemd/system rather than linked: a linked
 # unit lives on the ISO, which is not mounted yet when systemd loads units at
-# early boot, so it would be "not found" on every boot after the first.
+# early boot, so it would be "not found" on every boot after the first. They
+# are not enabled: this script starts them, on every boot, after what has to
+# come first. Enabled, systemd would start them at multi-user.target, and
+# cloud-init's final stage, which runs this script, comes after that target
+# (cloud-final.service: After=multi-user.target), so on every boot after the
+# first the Dot would go out before its proxy is set and its engine would read
+# a browser about to be switched. This script is also the first point of the
+# boot that has the seed's config.json (written by the same final stage).
 set -euo pipefail
 
 runtime="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -85,6 +94,14 @@ visudo -cqf /etc/sudoers.d/dot-install.new && mv -f /etc/sudoers.d/dot-install.n
 # A /run/user/<uid> for the desktop session without anyone logging in.
 loginctl enable-linger dot || log "warning: could not enable lingering for dot; the desktop runs without XDG_RUNTIME_DIR"
 
+# The Dot's browser (browser/dot-browser on this disk): the release an earlier start staged becomes the Dot's browser
+# now, while nothing of it runs, and the engine started below reads what it serves. A switch is one rename: one that
+# fails leaves the Dot the browser it had, and says why.
+"$runtime/browser/dot-browser" switch || log "error: the staged browser could not be switched to; the Dot keeps the browser it had"
+
+# A runtime before this one enabled the units: they would still start ahead of this script.
+for unit in "${units[@]}"; do rm -f "/etc/systemd/system/multi-user.target.wants/$unit"; done
+
 changed=()
 for unit in "${units[@]}"; do
   src="$runtime/units/$unit"
@@ -98,7 +115,6 @@ for unit in "${units[@]}"; do
 done
 
 systemctl daemon-reload
-systemctl enable "${units[@]}" >/dev/null 2>&1
 for unit in "${units[@]}"; do
   if [[ " ${changed[*]-} " == *" $unit "* ]] && systemctl is-active --quiet "$unit"; then
     log "restarting $unit (its unit file changed)"
@@ -109,3 +125,7 @@ for unit in "${units[@]}"; do
   fi
 done
 log "runtime $version installed; units: ${units[*]}"
+
+# A newer browser, when one is published, is built beside the Dot's in the background, through the Dot's own way out
+# (its proxy, when it has one, is set above): a start never waits for it, and the next start switches to it.
+systemd-run --quiet --no-block --collect --unit=dot-browser-stage "$runtime/browser/dot-browser" stage

@@ -12,9 +12,9 @@ import type { BrowserRelease } from "./browser-release.js";
 /** The engine's lock and the script that builds its Python environment from it, on the builder seed. */
 export const SEED_ENGINE_LOCK = "engine-requirements.lock";
 export const SEED_ENGINE_BUILD = "build-engine-env.sh";
-/** The script that builds the Dot's browser, on the builder seed. */
-export const SEED_BROWSER_BUILD = "build-browser-env.sh";
-/** The browsers build-browser-env.sh refuses, beside it on the seed, where it reads them. */
+/** The runtime disk's script that installs the Dot's browser, on the builder seed (provision.sh runs it). */
+export const SEED_BROWSER = "dot-browser.sh";
+/** The browsers dot-browser.sh refuses, beside it on the seed, where it reads them. */
 export const SEED_OTHER_BROWSERS = "other-browsers.txt";
 
 export interface BuilderSeedInput {
@@ -31,8 +31,8 @@ export interface BuilderSeedInput {
   /** builder/engine-requirements.lock and builder/build-engine-env.sh, as read. */
   engineLock: Uint8Array;
   engineBuild: Uint8Array;
-  /** builder/build-browser-env.sh and builder/other-browsers.txt, as read. */
-  browserBuild: Uint8Array;
+  /** runtime/dot-browser.sh and runtime/other-browsers.txt, as read. */
+  browserScript: Uint8Array;
   otherBrowsers: Uint8Array;
 }
 
@@ -53,7 +53,7 @@ export function pinsEnv(pins: GuestPins, browser: BrowserRelease): string {
     ["CORE_VERSION", browser.core],
     ["ENGINE_LOCK", SEED_ENGINE_LOCK],
     ["ENGINE_BUILD", SEED_ENGINE_BUILD],
-    ["BROWSER_BUILD", SEED_BROWSER_BUILD],
+    ["BROWSER", SEED_BROWSER],
     ["APT_SNAPSHOT", pins.apt_snapshot],
     ["APT_PACKAGES", pins.apt_packages.join(" ")],
   ];
@@ -80,7 +80,7 @@ export function builderSeedEntries(input: BuilderSeedInput): IsoEntry[] {
     { path: downloadFileName(input.pins.tunnel), file: input.tunnelBinary },
     { path: SEED_ENGINE_LOCK, data: input.engineLock },
     { path: SEED_ENGINE_BUILD, data: input.engineBuild },
-    { path: SEED_BROWSER_BUILD, data: input.browserBuild },
+    { path: SEED_BROWSER, data: input.browserScript },
     { path: SEED_OTHER_BROWSERS, data: input.otherBrowsers },
   ];
 }

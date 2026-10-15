@@ -105,14 +105,20 @@ describe("the engine smoke", () => {
     expect(read(join(smoke, "prepare-engine.sh"))).toContain("browser/smoke.sh");
   });
 
-  it("builds the browser smoke's browser with the image builder's own script and apt packages, the newest release, and runs the real server", () => {
+  it("builds the browser smoke's browser with the runtime disk's own script and the image's apt packages, updates it to the newest as a Dot does, and runs the real server", () => {
     const prepare = read(join(smoke, "prepare-engine.sh"));
-    expect(prepare).toContain('bash "$builder/build-browser-env.sh" /home/dot/.local/share/invisible-dots/mcp\n');
+    // The script provision.sh runs too, and install.sh at every start of a Dot.
+    expect(prepare).toContain("browser=$TREE/guest/image-builder/runtime/dot-browser.sh\n");
+    expect(prepare).toContain('bash "$browser" install "$before_mcp" "$before_playwright" "$before_core"');
     expect(prepare).toContain(".apt_packages[]");
     const provision = read(join(repo, "guest/image-builder/builder/provision.sh"));
-    expect(provision).toContain("BROWSER_BUILD");
+    expect(provision).toContain('bash "$payload/$BROWSER" install');
 
     const checks = code(read(join(smoke, "browser/smoke.sh")));
+    // The update a Dot's starts make: a stage, then a switch, before anything else runs.
+    expect(checks.indexOf("bash $DOT_BROWSER stage")).toBeGreaterThan(0);
+    expect(checks.indexOf("bash $DOT_BROWSER switch")).toBeGreaterThan(checks.indexOf("bash $DOT_BROWSER stage"));
+    expect(checks.indexOf("bash $DOT_BROWSER switch")).toBeLessThan(checks.indexOf("lay_out_guest"));
     // No stand-in for the browser: the engine runs what is on its PATH, in front of the real desktop script.
     expect(checks).toContain("unset MCP_COMMAND");
     expect(checks).not.toMatch(/fake_mcp|MCP_COMMAND=/);
