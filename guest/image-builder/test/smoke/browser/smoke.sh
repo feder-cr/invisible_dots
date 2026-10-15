@@ -9,9 +9,10 @@
 # only the real server can show is here: a page read, a screenshot that is a real picture and
 # crosses the relay whole, a profile that keeps its seed, a profile lock left by kill -9.
 #
-# prepare-engine.sh has built the engine's environment and, for this suite, the browser
-# (builder/build-browser-env.sh) and the golden image's apt packages. Exits non-zero when a check
-# failed or was skipped, and always prints
+# prepare-engine.sh has built the engine's environment and, for this suite, the golden image's apt
+# packages and the release of the browser before the newest (runtime/dot-browser.sh), which the
+# first checks bring to the newest as a Dot's starts do. Exits non-zero when a check failed or was
+# skipped, and always prints
 #   SMOKE: <passed> passed, <failed> failed, <skipped> skipped
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 set -uo pipefail
@@ -19,6 +20,25 @@ source "$HERE/../lib.sh"
 RUNTIME=$HERE/../../../runtime
 # A real launch downloads nothing but may wait for the network: events are waited for longer here.
 WAIT_EVENT_S=240
+
+# --- the Dot's browser brought to the newest release, as install.sh does at a Dot's starts ---
+# One start stages the newest release beside the Dot's (dot-browser stage, in the background there), the next one
+# switches to it before the units start (dot-browser switch). Everything below runs on what the switch left.
+DOT_BROWSER=$RUNTIME/dot-browser.sh
+BROWSERS=/home/dot/.local/share/invisible-dots/browser
+server_env() { dirname "$(dirname "$(readlink -f /home/dot/.local/bin/invisible-playwright-mcp)")"; }
+release_in() { su -s /bin/sh dot -c "$1/bin/python -c 'import importlib.metadata as m; print(m.version(\"invisible-playwright-mcp\"), m.version(\"invisible-playwright\"), m.version(\"invisible-core\"))'"; }
+NEWEST=$(bash "$DOT_BROWSER" newest)
+BEFORE_ENV=$(server_env)
+check "the Dot starts on the release before the newest" "[ \"\$(release_in \"$BEFORE_ENV\")\" != \"$NEWEST\" ]"
+check "a stage builds the newest beside it and leaves the Dot's browser as it was until a switch" \
+  "bash $DOT_BROWSER stage && [ -L $BROWSERS/next ] && [ \"\$(server_env)\" = \"$BEFORE_ENV\" ] && [ \"\$(release_in \$(readlink -f $BROWSERS/next))\" = \"$NEWEST\" ]"
+check "a second stage finds the newest staged already and builds nothing" \
+  "bash $DOT_BROWSER stage 2>&1 | grep -q 'staged already' && [ \$(ls -d $BROWSERS/*/ | wc -l) = 3 ]"
+check "the switch makes the newest the Dot's browser, removes the release before it and leaves nothing staged" \
+  "bash $DOT_BROWSER switch && [ \"\$(release_in \$(server_env))\" = \"$NEWEST\" ] && [ ! -e $BROWSERS/next ] && [ ! -e \"$BEFORE_ENV\" ] && [ \$(ls -d $BROWSERS/*/ | wc -l) = 1 ]"
+check "a stage on the newest builds nothing, and a switch with nothing staged changes nothing" \
+  "bash $DOT_BROWSER stage 2>&1 | grep -q 'is the newest release' && bash $DOT_BROWSER switch && [ ! -e $BROWSERS/next ] && [ \"\$(release_in \$(server_env))\" = \"$NEWEST\" ]"
 
 lay_out_guest
 write_host_token

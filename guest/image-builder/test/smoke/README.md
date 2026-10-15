@@ -85,15 +85,19 @@ The real server and a real Firefox are not run by this smoke: they are the brows
 ## The browser smoke
 
 `browser/smoke.sh` runs the Dot's real browser. The golden image's apt packages (`pins.json`:
-the desktop, Firefox's libraries, ImageMagick) are installed, the browser is built by
-`builder/build-browser-env.sh` at the newest release (the MCP server's environment and the
-browser engine: the script `provision.sh` runs), the
+the desktop, Firefox's libraries, ImageMagick) are installed, the browser is installed by
+`runtime/dot-browser.sh` (the script `provision.sh` runs and `install.sh` updates every Dot with) on
+the release before the newest, and the first checks bring it to the newest as a Dot's starts do:
+a stage builds the newest beside it, a switch makes it the Dot's browser and removes the old one; the
 runtime disk's `dot-desktop` script starts Xvfb and an XFCE session on `:0` as dot, and the Dot
 runs as in the engine smoke with no stand-in for the browser: the engine finds
 `invisible-playwright-mcp` on its PATH. Only the model is a stand-in, and the pages the browser
 opens are served from the container. The browser needs the network twice, at the build (the
 engine) and at a launch (the egress address, for the timezone, and the library's GeoIP database). What it pins:
 
+- a Dot on the release before the newest is brought to the newest as its starts bring it: a stage builds the newest
+  beside its browser and changes nothing else, a second stage builds nothing, the switch makes the newest the Dot's
+  browser and removes the old one, and on the newest a stage and a switch change nothing;
 - the model launches an identity and the real server answers that its browser is open; Firefox
   and the server run as `dot`, the server with the profile, its home, a real window on `:0`, no
   proxy variable (an identity with no proxy of its own, the default, inherits the VM's egress) and

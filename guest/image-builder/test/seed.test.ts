@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeIso } from "@invisible-dots/iso";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BUILDER_BROWSER_BUILD, BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, BUILDER_OTHER_BROWSERS, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot, readGuestAsset } from "../src/assets.js";
+import { RUNTIME_BROWSER, BUILDER_ENGINE_BUILD, BUILDER_ENGINE_LOCK, RUNTIME_OTHER_BROWSERS, BUILDER_PROVISION, BUILDER_USER_DATA, defaultAssetRoot, readGuestAsset } from "../src/assets.js";
 import type { BrowserRelease } from "../src/browser-release.js";
 import { GUEST_PINS } from "../src/pins.js";
 import { SEED_VOLUME_ID } from "@invisible-dots/vm-manager";
@@ -31,7 +31,7 @@ describe("pins.env", () => {
     expect(text).toContain("CORE_VERSION='47.39.0'\n");
     expect(text).toContain("ENGINE_LOCK='engine-requirements.lock'\n");
     expect(text).toContain("ENGINE_BUILD='build-engine-env.sh'\n");
-    expect(text).toContain("BROWSER_BUILD='build-browser-env.sh'\n");
+    expect(text).toContain("BROWSER='dot-browser.sh'\n");
     expect(text).toContain(`APT_SNAPSHOT='${GUEST_PINS.apt_snapshot}'\n`);
     expect(text).toContain(`APT_PACKAGES='${GUEST_PINS.apt_packages.join(" ")}'\n`);
 
@@ -55,8 +55,8 @@ describe("the builder seed", () => {
     await writeFile(tunnelBinary, "hev bytes");
     const engineLock = await readGuestAsset(defaultAssetRoot(), BUILDER_ENGINE_LOCK);
     const engineBuild = await readGuestAsset(defaultAssetRoot(), BUILDER_ENGINE_BUILD);
-    const browserBuild = await readGuestAsset(defaultAssetRoot(), BUILDER_BROWSER_BUILD);
-    const otherBrowsers = await readGuestAsset(defaultAssetRoot(), BUILDER_OTHER_BROWSERS);
+    const browserScript = await readGuestAsset(defaultAssetRoot(), RUNTIME_BROWSER);
+    const otherBrowsers = await readGuestAsset(defaultAssetRoot(), RUNTIME_OTHER_BROWSERS);
     const userData = await readGuestAsset(defaultAssetRoot(), BUILDER_USER_DATA);
     const provision = await readGuestAsset(defaultAssetRoot(), BUILDER_PROVISION);
     const entries = builderSeedEntries({
@@ -69,7 +69,7 @@ describe("the builder seed", () => {
       tunnelBinary,
       engineLock,
       engineBuild,
-      browserBuild,
+      browserScript,
       otherBrowsers,
     });
 
@@ -82,7 +82,7 @@ describe("the builder seed", () => {
       "hev-socks5-tunnel-linux-x86_64",
       "engine-requirements.lock",
       "build-engine-env.sh",
-      "build-browser-env.sh",
+      "dot-browser.sh",
       "other-browsers.txt",
     ]);
     expect(entries[0]).toEqual({ path: "user-data", data: userData });
@@ -90,8 +90,9 @@ describe("the builder seed", () => {
     expect(entries[5]).toEqual({ path: "hev-socks5-tunnel-linux-x86_64", file: tunnelBinary });
     expect(entries[6]).toEqual({ path: "engine-requirements.lock", data: engineLock });
     expect(entries[7]).toEqual({ path: "build-engine-env.sh", data: engineBuild });
-    expect(entries[8]).toEqual({ path: "build-browser-env.sh", data: browserBuild });
-    // Beside the script on the seed, where it reads the list (build-browser-env.sh).
+    // The runtime disk's script: provision.sh installs the golden image's browser with the one every Dot updates its own with.
+    expect(entries[8]).toEqual({ path: "dot-browser.sh", data: browserScript });
+    // Beside the script on the seed, where it reads the list (dot-browser.sh).
     expect(entries[9]).toEqual({ path: "other-browsers.txt", data: otherBrowsers });
 
     // The real writer accepts it under the label NoCloud looks for.

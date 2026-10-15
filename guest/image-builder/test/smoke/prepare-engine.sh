@@ -16,8 +16,8 @@
 #                 LICENSE, UPSTREAM.md), world-readable as on the ISO
 # The browser suite builds one more thing, as the golden image does it: the apt packages of
 # pins.json (the desktop, Firefox's libraries, ImageMagick) and the Dot's browser
-# (builder/build-browser-env.sh: the newest invisible-playwright-mcp's environment and
-# the engine of the browser).
+# (runtime/dot-browser.sh: the release before the newest, which browser/smoke.sh brings to
+# the newest as a Dot's start does).
 set -euo pipefail
 : "${TREE:?run.sh sets TREE}" "${AGENTD_BIN:?run.sh sets AGENTD_BIN}"
 suite=${SMOKE_SUITE:-engine}
@@ -79,9 +79,16 @@ if [ "$suite" = browser ]; then
   snapshot=$(jq -r '.apt_snapshot' "$TREE/guest/image-builder/pins.json")
   apt-get --snapshot "$snapshot" --error-on=any update -qq >/dev/null
   apt-get --snapshot "$snapshot" install -y -qq --no-install-recommends $(jq -r '.apt_packages[]' "$TREE/guest/image-builder/pins.json") >/dev/null
-  # The Dot's browser, with the script provision.sh runs: the newest release, as the next image installs it. dot
+  # The Dot's browser, with the runtime disk's script, which provision.sh runs too: the release before the newest, on
+  # the newest invisible-playwright and invisible-core (so the browser engine is downloaded once). browser/smoke.sh then
+  # stages the newest and switches to it, as a Dot's starts do, and its checks run on what the switch left. dot
   # reaches its home, not the tree.
-  bash "$builder/build-browser-env.sh" /home/dot/.local/share/invisible-dots/mcp
+  browser=$TREE/guest/image-builder/runtime/dot-browser.sh
+  newest=$(bash "$browser" newest)
+  read -r mcp playwright core <<< "$newest"
+  before=$(bash "$browser" newest "invisible-playwright-mcp<$mcp" "invisible-playwright==$playwright" "invisible-core==$core")
+  read -r before_mcp before_playwright before_core <<< "$before"
+  bash "$browser" install "$before_mcp" "$before_playwright" "$before_core"
 fi
 
 exec bash "$checks"

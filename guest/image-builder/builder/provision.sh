@@ -78,14 +78,14 @@ id dotagentd >/dev/null 2>&1 || { console "the builder seed made no user dotagen
 
 step "installing invisible-playwright-mcp $MCP_VERSION (invisible-playwright $PLAYWRIGHT_VERSION, invisible-core $CORE_VERSION), fetching the browser engine"
 # The release is the newest on the index when the host started the build (browser-release.ts): the three versions
-# that make it up are installed exactly, and uv resolves what they need. The environment is built as dot by the
-# script the seed carries, the one the browser smoke runs too (section 3.3), which refuses any other browser among
-# what it installed. The engine is fetched with the invisible-playwright of that environment, so the cached engine is
-# the one the server's seal expects, in ~dot/.cache/invisible-playwright.
+# that make it up are installed exactly, and uv resolves what they need. The seed carries the runtime disk's
+# dot-browser, the one owner of where the Dot's browser lives (section 3.3), which every Dot runs at its starts to
+# bring its browser to the newest release; it builds the environment as dot, refuses any other browser among what it
+# installed, and fetches the engine with the invisible-playwright of that environment, so the cached engine is the
+# one the server's seal expects, in ~dot/.cache/invisible-playwright.
 as_dot() { sudo -u dot -H env PATH="/home/dot/.local/bin:/usr/local/bin:/usr/bin:/bin" "$@"; }
-mcp_env=/home/dot/.local/share/invisible-dots/mcp
-bash "$payload/$BROWSER_BUILD" "$mcp_env" \
-  "invisible-playwright-mcp==$MCP_VERSION" "invisible-playwright==$PLAYWRIGHT_VERSION" "invisible-core==$CORE_VERSION"
+bash "$payload/$BROWSER" install "$MCP_VERSION" "$PLAYWRIGHT_VERSION" "$CORE_VERSION"
+mcp_env="$(dirname "$(dirname "$(readlink -f /home/dot/.local/bin/invisible-playwright-mcp)")")"
 # What the environment holds, read from it: the manifest records what was installed, not what was asked for.
 installed_version() { as_dot "$mcp_env/bin/python" -c 'import sys, importlib.metadata as m; print(m.version(sys.argv[1]))' "$1"; }
 # The engine the image carries is read from the library that decides it (the seal of invisible_core: tag,

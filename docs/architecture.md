@@ -285,10 +285,11 @@ QEMU on the same disk would corrupt it.
   part of the inputs digest, so a new release is a new image, and the image's
   manifest records the ones installed; the scheduled run of
   `.github/workflows/golden-image.yml` publishes that image without any change
-  to this repository. The builder installs them with
+  to this repository. The builder installs them with the runtime disk's own
+  `guest/image-builder/runtime/dot-browser.sh` (below), which runs
   `uv pip install --only-binary :all:`, so no package's build script runs, and
   refuses an environment that holds another browser (the names in
-  `guest/image-builder/builder/other-browsers.txt`). The apt packages come from the Ubuntu archive as it
+  `guest/image-builder/runtime/other-browsers.txt`). The apt packages come from the Ubuntu archive as it
   was at the moment `apt_snapshot` of `pins.json` names (snapshot.ubuntu.com,
   `apt-get --snapshot`), so they and their dependencies are the same on any day
   of the build; apt checks their signatures.
@@ -297,6 +298,29 @@ QEMU on the same disk would corrupt it.
   the `dot-agentd` binary and the systemd units. A new
   version of our code is a new ISO and a VM restart, not a new golden image and
   not a rebuilt overlay.
+- A Dot keeps the golden image it was made from, and its **browser follows the
+  newest release** all the same: `dot-browser` (on the runtime disk, at
+  `browser/dot-browser`) keeps each release in an environment of its own,
+  `~dot/.local/share/invisible-dots/browser/<mcp>-<playwright>-<core>` (a venv
+  cannot move), and the Dot's browser is the one
+  `~dot/.local/bin/invisible-playwright-mcp` links to. At every start,
+  `install.sh` switches that link to a release an earlier start staged, in one
+  rename and before the Dot's units start, and removes the other environments;
+  after the units, it stages in the background (`dot-browser-stage`, a transient
+  unit) the newest release as uv resolves `invisible-playwright-mcp`, when it is
+  not the Dot's already: its environment and the browser engine its
+  `invisible-core` seals, through the Dot's own way out. A start never waits for
+  a new release and the Dot uses it from its next start; without the network a
+  stage fails and the Dot keeps its browser. The engine reads what the server
+  serves when it starts (section 6), so it always reads the release the switch
+  left. The library keeps every engine it downloaded in its cache.
+- `install.sh` (cloud-init's per-boot script) is what starts the Dot's units,
+  on every boot, after the VM proxy and the browser switch: they are copied into
+  `/etc/systemd/system` and never enabled. Enabled, systemd would start them at
+  `multi-user.target`, and cloud-init's final stage, which runs `install.sh`
+  and writes the seed's `config.json` first, comes after that target
+  (`cloud-final.service` is `After=multi-user.target`): on every boot after the
+  first, a Dot would have gone out before its proxy was set.
 
 The host builds the runtime disk from this checkout, and the golden image from
 public sources (`invisible-dots image build`, code in `guest/image-builder/`)

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { GUEST_PATHS } from "@invisible-dots/shared";
 import { describe, expect, it } from "vitest";
-import { BUILDER_OTHER_BROWSERS, defaultAssetRoot, GUEST_ASSETS, GUEST_UNITS, unitAsset } from "../src/assets.js";
+import { defaultAssetRoot, GUEST_ASSETS, GUEST_UNITS, RUNTIME_OTHER_BROWSERS, unitAsset } from "../src/assets.js";
 import { GUEST_PINS } from "../src/pins.js";
 
 const root = defaultAssetRoot();
@@ -31,7 +31,7 @@ const bashUsable = bashCanRead(join(root, "runtime", "dot-desktop.sh"));
 
 describe("guest files", () => {
   it("lists every guest script", () => {
-    expect([...scripts].sort()).toEqual(["builder/build-browser-env.sh", "builder/build-engine-env.sh", "builder/provision.sh", "runtime/dot-desktop.sh", "runtime/dot-install.sh", "runtime/install.sh"]);
+    expect([...scripts].sort()).toEqual(["builder/build-engine-env.sh", "builder/provision.sh", "runtime/dot-browser.sh", "runtime/dot-desktop.sh", "runtime/dot-install.sh", "runtime/install.sh"]);
   });
 
   it.each(GUEST_ASSETS)("%s is LF-only ASCII and says nothing about vsock or libvirt", (path) => {
@@ -172,19 +172,41 @@ describe.skipIf(!bashUsable)("dot-install, the one command dot may run as root",
 
 describe("the Dot's browser", () => {
   const provision = text("builder/provision.sh");
-  const build = text("builder/build-browser-env.sh");
+  const build = text("runtime/dot-browser.sh");
+  const install = text("runtime/install.sh");
 
-  it("is the release the build resolved, installed exactly by the script the seed carries", () => {
-    expect(provision).toContain('bash "$payload/$BROWSER_BUILD" "$mcp_env" \\\n');
-    expect(provision).toContain('"invisible-playwright-mcp==$MCP_VERSION" "invisible-playwright==$PLAYWRIGHT_VERSION" "invisible-core==$CORE_VERSION"');
-    expect(provision).toContain("mcp_env=/home/dot/.local/share/invisible-dots/mcp\n");
+  it("is the release the build resolved, installed exactly by the runtime disk's own script, which the seed carries", () => {
+    expect(provision).toContain('bash "$payload/$BROWSER" install "$MCP_VERSION" "$PLAYWRIGHT_VERSION" "$CORE_VERSION"\n');
+    // What provision.sh records is read from the environment the server's link names.
+    expect(provision).toContain('mcp_env="$(dirname "$(dirname "$(readlink -f /home/dot/.local/bin/invisible-playwright-mcp)")")"\n');
+    expect(build).toContain('local requirements=("${packages[0]}==$2" "${packages[1]}==$3" "${packages[2]}==$4")');
     expect(build).toContain('as_dot uv venv --quiet --python /usr/bin/python3 "$env_dir"');
-    // Wheels only, the requirements given or the newest server.
+    // Wheels only, the release given.
     expect(build).toContain('as_dot uv pip install --no-cache --python "$env_dir/bin/python" --only-binary :all: "${requirements[@]}"');
-    expect(build).toContain('[ "${#requirements[@]}" -gt 0 ] || requirements=(invisible-playwright-mcp)');
     expect(build).not.toMatch(/uv tool install/);
-    expect(build).toContain('as_dot ln -sfn "$env_dir/bin/invisible-playwright-mcp" "$bin_dir/invisible-playwright-mcp"');
     expect(build).toContain('as_dot "$env_dir/bin/invisible-playwright" fetch');
+  });
+
+  it("keeps each release in an environment of its own and switches the server's link in one rename", () => {
+    expect(build).toContain("releases=$share/browser\n");
+    expect(build).toContain('local env_dir="$releases/$1-$2-$3"');
+    expect(build).toContain('env_dir="$releases/$mcp-$playwright-$core"');
+    expect(build).toContain('as_dot ln -sfn "$1/bin/invisible-playwright-mcp" "$command_link.new"\n  as_dot mv -T "$command_link.new" "$command_link"');
+    // A release is staged only once it is whole: the link to it is the last step of a stage.
+    expect(build).toMatch(/build "\$env_dir" "\$mcp" "\$playwright" "\$core"\n  as_dot ln -sfn "\$env_dir" "\$staged\.new"\n  as_dot mv -T "\$staged\.new" "\$staged"/);
+    // The newest is uv's own resolution of the server, not a version written anywhere.
+    expect(build).toContain("as_dot uv pip compile - --quiet --no-cache --no-header --no-annotate");
+  });
+
+  it("is brought to the newest release at a Dot's starts: switched before the units start, staged after them", () => {
+    const proxy = install.indexOf('nft -f "$proxy_dir/allow.nft"');
+    const switched = install.indexOf('"$runtime/browser/dot-browser" switch');
+    const started = install.indexOf('systemctl start "$unit"');
+    const staged = install.indexOf('systemd-run --quiet --no-block --collect --unit=dot-browser-stage "$runtime/browser/dot-browser" stage');
+    expect(proxy).toBeGreaterThan(0);
+    expect(switched).toBeGreaterThan(proxy);
+    expect(started).toBeGreaterThan(switched);
+    expect(staged).toBeGreaterThan(started);
   });
 
   it("records the versions the environment holds, read from it, not the ones it was asked for", () => {
@@ -197,9 +219,9 @@ describe("the Dot's browser", () => {
   /**
    * Owner's rule: the only browser of a Dot is invisible-playwright-mcp. No other browser, headless browser or browser
    * library enters the guest image: not as an apt package, not among the Python packages the browser's environment
-   * installs (build-browser-env.sh refuses them, reading the same list), not as a command of the scripts that build it.
+   * installs (dot-browser.sh refuses them, reading the same list), not as a command of the scripts that build it.
    */
-  const otherBrowsers = text(BUILDER_OTHER_BROWSERS)
+  const otherBrowsers = text(RUNTIME_OTHER_BROWSERS)
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
@@ -207,10 +229,10 @@ describe("the Dot's browser", () => {
 
   it("installs no other browser, headless browser or browser library", () => {
     expect(GUEST_PINS.apt_packages.filter(isOtherBrowser)).toEqual([]);
-    expect(build).toContain('other_browsers="$(dirname "${BASH_SOURCE[0]}")/other-browsers.txt"');
+    expect(build).toContain('other_browsers="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/other-browsers.txt"');
     expect(build).toContain('installed="$(as_dot uv pip freeze --python "$env_dir/bin/python"');
-    expect(build).toContain("another browser would enter the image (owner's rule)");
-    for (const [name, content] of [["provision.sh", provision], ["build-browser-env.sh", build]] as const) {
+    expect(build).toContain("another browser would enter the Dot (owner's rule)");
+    for (const [name, content] of [["provision.sh", provision], ["dot-browser.sh", build]] as const) {
       expect(content, name).not.toMatch(/\b(chromium|google-chrome|selenium|puppeteer|patchright|chromedriver|geckodriver)\b/i);
       expect(content, name).not.toMatch(/\bplaywright install\b/);
     }
@@ -247,7 +269,16 @@ describe("guest units", () => {
     expect(unit).toMatch(/^Environment=DISPLAY=:0$/m);
     expect(unit).toMatch(/^RequiresMountsFor=\/opt\/invisible-dots$/m);
     expect(unit).toMatch(/^Restart=on-failure$/m);
-    expect(unit).toMatch(/^WantedBy=multi-user\.target$/m);
+    // Not enabled: install.sh starts it, after the Dot's proxy and browser (the test below).
+    expect(unit).not.toMatch(/^\[Install\]$/m);
+  });
+
+  it("are started by install.sh alone, which also takes back what an earlier runtime enabled", () => {
+    // Enabled, systemd would start them at multi-user.target on every boot after the first, ahead of cloud-init's final
+    // stage that runs install.sh (cloud-final.service is After=multi-user.target): before the proxy and the browser.
+    const install = text("runtime/install.sh");
+    expect(install).not.toMatch(/systemctl enable/);
+    expect(install).toContain('for unit in "${units[@]}"; do rm -f "/etc/systemd/system/multi-user.target.wants/$unit"; done');
   });
 
   it("runs the desktop, which is dot's, with uv's bin dir first", () => {
@@ -256,7 +287,7 @@ describe("guest units", () => {
 
   it("runs the engine, which holds the key, with a PATH of system directories only, and names the browser's server by its path", () => {
     // Nothing the engine runs by name may come from a directory dot (the model) can write. The browser's MCP server
-    // is dot's (build-browser-env.sh links it into ~dot/.local/bin): the unit names it, and the engine starts it as dot.
+    // is dot's (dot-browser.sh links it into ~dot/.local/bin): the unit names it, and the engine starts it as dot.
     for (const dir of unitPath("invisible-dots-agent.service")) expect(dir, `PATH entry ${dir}`).toMatch(/^\/(usr\/local\/|usr\/)?s?bin$/);
     expect(text(unitAsset("invisible-dots-agent.service"))).toMatch(/^Environment=INVISIBLE_DOTS_MCP_COMMAND=\/home\/dot\/\.local\/bin\/invisible-playwright-mcp$/m);
   });
@@ -267,7 +298,8 @@ describe("guest units", () => {
     expect(unit).toMatch(/^Environment=DISPLAY=:0$/m);
     expect(unit).toMatch(/^RequiresMountsFor=\/opt\/invisible-dots$/m);
     expect(unit).toMatch(/^Restart=on-failure$/m);
-    expect(unit).toMatch(/^WantedBy=multi-user\.target$/m);
+    // Not enabled: install.sh starts it, after the Dot's proxy and browser (the test below).
+    expect(unit).not.toMatch(/^\[Install\]$/m);
     // The daemon starts the poweroff as itself, and may become root through it: nothing it finds may be in a
     // directory dot (the model) can write, so its PATH has no entry of /home (dot's ~/.local/bin included) and
     // none that is relative or empty. The PATH of the model's commands is the daemon's to build.

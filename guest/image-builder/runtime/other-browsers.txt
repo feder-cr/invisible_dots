@@ -1,7 +1,7 @@
 # Owner's rule: the only browser of a Dot is invisible-playwright-mcp. No other browser, headless browser or browser
 # library enters the guest image. One name per line; a package or apt package is refused when its name is one of
-# these or starts with one of them followed by "-". Read by build-browser-env.sh, on what it actually installed, and
-# by the tests, on the apt packages of pins.json.
+# these or starts with one of them followed by "-". Read by dot-browser.sh, beside it, on what it actually installed,
+# and by the tests, on the apt packages of pins.json.
 chromium
 chrome
 google-chrome

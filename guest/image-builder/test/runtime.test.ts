@@ -115,6 +115,8 @@ describe("buildRuntimeIso", () => {
         "bin/dot-agentd",
         "bin/dot-desktop",
         "bin/dot-install",
+        "browser/dot-browser",
+        "browser/other-browsers.txt",
         "engine/LICENSE",
         "engine/UPSTREAM.md",
         "engine/nanobot/__init__.py",
@@ -132,6 +134,9 @@ describe("buildRuntimeIso", () => {
     expect(read("install.sh")).toEqual(await readFile(join(defaultAssetRoot(), "runtime", "install.sh")));
     expect(read("vmproxy.py")).toEqual(await readFile(join(defaultAssetRoot(), "runtime", "vmproxy.py")));
     expect(read("bin/dot-desktop")).toEqual(await readFile(join(defaultAssetRoot(), "runtime", "dot-desktop.sh")));
+    // The browser's script with its list beside it, where it reads it: install.sh switches and stages with them.
+    expect(read("browser/dot-browser")).toEqual(await readFile(join(defaultAssetRoot(), "runtime", "dot-browser.sh")));
+    expect(read("browser/other-browsers.txt")).toEqual(await readFile(join(defaultAssetRoot(), "runtime", "other-browsers.txt")));
     expect(read("units/dot-agentd.service")).toEqual(await readFile(join(defaultAssetRoot(), "units", "dot-agentd.service")));
     // The engine's source as it is.
     expect(read("engine/nanobot/dots/main.py").toString()).toBe("def main(): ...\n");
