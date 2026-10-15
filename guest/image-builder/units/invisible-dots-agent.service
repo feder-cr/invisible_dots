@@ -44,6 +44,3 @@ ExecStart=/opt/invisible-dots-engine/bin/python -I -B -m nanobot
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target

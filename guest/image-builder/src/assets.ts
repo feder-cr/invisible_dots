@@ -32,7 +32,7 @@ export const RUNTIME_DESKTOP = "runtime/dot-desktop.sh";
 export const RUNTIME_DOT_INSTALL = "runtime/dot-install.sh";
 /** Writes the VM proxy's tunnel settings, routes and firewall; install.sh runs it when the Dot has a proxy. */
 export const RUNTIME_VMPROXY = "runtime/vmproxy.py";
-/** The guest units, in the order install.sh enables them. */
+/** The guest units, in the order install.sh starts them. */
 export const GUEST_UNITS = ["dot-desktop.service", "dot-agentd.service", "invisible-dots-agent.service"] as const;
 
 export function unitAsset(name: (typeof GUEST_UNITS)[number]): string {
