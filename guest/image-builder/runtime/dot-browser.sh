@@ -45,16 +45,16 @@ newest() {
   for package in "${packages[@]}"; do
     # uv writes each name normalized (PEP 503); normalized here too, so the match does not depend on it.
     version="$(printf '%s\n' "$resolved" | awk -F'==' -v want="$package" \
-      '{ name = tolower($1); gsub(/[_.]+/, "-", name); if (name == want) { print $2; exit } }')"
+      '{ name = tolower($1); gsub(/[_.]+/, "-", name); if (name == want && !found) { print $2; found = 1 } }')"
     [ -n "$version" ] || die "uv's resolution of ${packages[0]} has no $package"
     versions+=("$version")
   done
   printf '%s %s %s\n' "${versions[@]}"
 }
 
-# The environment of the Dot's browser, from its command's link; empty when it has none.
+# The environment of the Dot's browser, from its command's link; empty when it has none (no link, or a link to nothing).
 current_env() {
-  [ -L "$command_link" ] || return 0
+  [ -L "$command_link" ] && [ -e "$command_link" ] || return 0
   dirname "$(dirname "$(readlink -f "$command_link")")"
 }
 
@@ -93,7 +93,6 @@ use() {
   as_dot mkdir -p "$(dirname "$command_link")"
   as_dot ln -sfn "$1/bin/invisible-playwright-mcp" "$command_link.new"
   as_dot mv -T "$command_link.new" "$command_link"
-  as_dot sh -c 'command -v invisible-playwright-mcp' >/dev/null || die "invisible-playwright-mcp is not on the PATH of dot"
 }
 
 # prune <directory>...: every release environment but these is removed, the golden image's former one included.
@@ -112,6 +111,8 @@ install_release() {
   local env_dir="$releases/$1-$2-$3"
   build "$env_dir" "$@"
   use "$env_dir"
+  # The image's PATH of dot, where the model's commands find the server, reaches the link.
+  as_dot sh -c 'command -v invisible-playwright-mcp' >/dev/null || die "invisible-playwright-mcp is not on the PATH of dot"
   prune "$env_dir"
   log "the Dot's browser is invisible-playwright-mcp $1 (invisible-playwright $2, invisible-core $3)"
 }

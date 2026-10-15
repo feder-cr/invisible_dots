@@ -84,9 +84,10 @@ if [ "$suite" = browser ]; then
   # stages the newest and switches to it, as a Dot's starts do, and its checks run on what the switch left. dot
   # reaches its home, not the tree.
   browser=$TREE/guest/image-builder/runtime/dot-browser.sh
-  read -r mcp playwright core <<< "$(bash "$browser" newest)"
-  read -r before_mcp before_playwright before_core <<< \
-    "$(bash "$browser" newest "invisible-playwright-mcp<$mcp" "invisible-playwright==$playwright" "invisible-core==$core")"
+  newest=$(bash "$browser" newest)
+  read -r mcp playwright core <<< "$newest"
+  before=$(bash "$browser" newest "invisible-playwright-mcp<$mcp" "invisible-playwright==$playwright" "invisible-core==$core")
+  read -r before_mcp before_playwright before_core <<< "$before"
   bash "$browser" install "$before_mcp" "$before_playwright" "$before_core"
 fi
 

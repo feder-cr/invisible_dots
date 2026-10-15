@@ -95,9 +95,10 @@ visudo -cqf /etc/sudoers.d/dot-install.new && mv -f /etc/sudoers.d/dot-install.n
 loginctl enable-linger dot || log "warning: could not enable lingering for dot; the desktop runs without XDG_RUNTIME_DIR"
 
 # The Dot's browser (browser/dot-browser on this disk): the release an earlier start staged becomes the Dot's browser
-# now, while nothing of it runs, and the engine started below reads what it serves. A switch is one rename: one that
-# fails leaves the Dot the browser it had, and says why.
-"$runtime/browser/dot-browser" switch || log "error: the staged browser could not be switched to; the Dot keeps the browser it had"
+# now, while nothing of it runs, and the engine started below reads what it serves. The switch is one rename, so the
+# Dot's browser is either the one it had or the staged one; a switch that fails says why, and the next start tries
+# again while the release stays staged.
+"$runtime/browser/dot-browser" switch || log "error: the browser switch did not finish (above); the Dot starts with the browser its link names"
 
 # A runtime before this one enabled the units: they would still start ahead of this script.
 for unit in "${units[@]}"; do rm -f "/etc/systemd/system/multi-user.target.wants/$unit"; done
