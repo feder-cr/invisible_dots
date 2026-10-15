@@ -297,6 +297,13 @@ QEMU on the same disk would corrupt it.
   the `dot-agentd` binary and the systemd units. A new
   version of our code is a new ISO and a VM restart, not a new golden image and
   not a rebuilt overlay.
+- `install.sh` (cloud-init's per-boot script) is what starts the Dot's units,
+  on every boot, after the VM proxy: they are copied into
+  `/etc/systemd/system` and never enabled. Enabled, systemd would start them at
+  `multi-user.target`, and cloud-init's final stage, which runs `install.sh`
+  and writes the seed's `config.json` first, comes after that target
+  (`cloud-final.service` is `After=multi-user.target`): on every boot after the
+  first, a Dot would have gone out before its proxy was set.
 
 The host builds the runtime disk from this checkout, and the golden image from
 public sources (`invisible-dots image build`, code in `guest/image-builder/`)

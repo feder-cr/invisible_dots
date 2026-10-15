@@ -247,7 +247,17 @@ describe("guest units", () => {
     expect(unit).toMatch(/^Environment=DISPLAY=:0$/m);
     expect(unit).toMatch(/^RequiresMountsFor=\/opt\/invisible-dots$/m);
     expect(unit).toMatch(/^Restart=on-failure$/m);
-    expect(unit).toMatch(/^WantedBy=multi-user\.target$/m);
+    // Not enabled: install.sh starts it, after the Dot's proxy (the test below).
+    expect(unit).not.toMatch(/^\[Install\]$/m);
+  });
+
+  it("are started by install.sh alone, after the VM proxy, which also takes back what an earlier runtime enabled", () => {
+    // Enabled, systemd would start them at multi-user.target on every boot after the first, ahead of cloud-init's final
+    // stage that runs install.sh (cloud-final.service is After=multi-user.target): before the Dot's proxy is set.
+    const install = text("runtime/install.sh");
+    expect(install).not.toMatch(/systemctl enable/);
+    expect(install).toContain('for unit in "${units[@]}"; do rm -f "/etc/systemd/system/multi-user.target.wants/$unit"; done');
+    expect(install.indexOf('systemctl start "$unit"')).toBeGreaterThan(install.indexOf('nft -f "$proxy_dir/allow.nft"'));
   });
 
   it("runs the desktop, which is dot's, with uv's bin dir first", () => {
@@ -267,7 +277,8 @@ describe("guest units", () => {
     expect(unit).toMatch(/^Environment=DISPLAY=:0$/m);
     expect(unit).toMatch(/^RequiresMountsFor=\/opt\/invisible-dots$/m);
     expect(unit).toMatch(/^Restart=on-failure$/m);
-    expect(unit).toMatch(/^WantedBy=multi-user\.target$/m);
+    // Not enabled: install.sh starts it, after the Dot's proxy (the test below).
+    expect(unit).not.toMatch(/^\[Install\]$/m);
     // The daemon starts the poweroff as itself, and may become root through it: nothing it finds may be in a
     // directory dot (the model) can write, so its PATH has no entry of /home (dot's ~/.local/bin included) and
     // none that is relative or empty. The PATH of the model's commands is the daemon's to build.

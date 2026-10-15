@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # The runtime ISO's install hook. cloud-init runs it as root on every boot
 # (a per-boot script written by the seed), after the ISO is mounted at
-# /opt/invisible-dots. It installs the guest units and starts them.
+# /opt/invisible-dots. It sets up the Dot's way out, then installs the guest
+# units and starts them.
 #
 # The units are COPIED into /etc/systemd/system rather than linked: a linked
 # unit lives on the ISO, which is not mounted yet when systemd loads units at
-# early boot, so it would be "not found" on every boot after the first.
+# early boot, so it would be "not found" on every boot after the first. They
+# are not enabled: this script starts them, on every boot, after the proxy.
+# Enabled, systemd would start them at multi-user.target, and cloud-init's
+# final stage, which runs this script, comes after that target
+# (cloud-final.service: After=multi-user.target): on every boot after the
+# first the Dot would go out before its proxy is set. This script is also the
+# first point of the boot that has the seed's config.json, which the same final
+# stage writes.
 set -euo pipefail
 
 runtime="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -85,6 +93,9 @@ visudo -cqf /etc/sudoers.d/dot-install.new && mv -f /etc/sudoers.d/dot-install.n
 # A /run/user/<uid> for the desktop session without anyone logging in.
 loginctl enable-linger dot || log "warning: could not enable lingering for dot; the desktop runs without XDG_RUNTIME_DIR"
 
+# A runtime before this one enabled the units: they would still start ahead of this script.
+for unit in "${units[@]}"; do rm -f "/etc/systemd/system/multi-user.target.wants/$unit"; done
+
 changed=()
 for unit in "${units[@]}"; do
   src="$runtime/units/$unit"
@@ -98,7 +109,6 @@ for unit in "${units[@]}"; do
 done
 
 systemctl daemon-reload
-systemctl enable "${units[@]}" >/dev/null 2>&1
 for unit in "${units[@]}"; do
   if [[ " ${changed[*]-} " == *" $unit "* ]] && systemctl is-active --quiet "$unit"; then
     log "restarting $unit (its unit file changed)"
